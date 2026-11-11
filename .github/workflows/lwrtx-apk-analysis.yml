@@ -38,10 +38,16 @@ jobs:
 
       - name: Download Minecraft PE 1.26.60.4 from test release
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          URL="https://github.com/choigamecungshin-crypto/test/releases/download/Minecraft-1.26.60.4/Minecraft_1.26.60.4.apk"
-          curl --fail --location --show-error --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 5400 -o minecraft.apk "$URL"
+          URL="https://api.github.com/repos/choigamecungshin-crypto/test/releases/assets/735506478"
+          curl --fail --location --show-error --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 5400 \
+            -H "Accept: application/octet-stream" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -o minecraft.apk "$URL"
           test -s minecraft.apk
           echo "APK_SHA256=$(sha256sum minecraft.apk | cut -d' ' -f1)" >> "$GITHUB_ENV"
           echo "APK_SIZE=$(stat -c%s minecraft.apk)" >> "$GITHUB_ENV"
