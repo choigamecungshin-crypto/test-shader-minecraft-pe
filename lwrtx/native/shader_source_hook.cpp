@@ -152,3 +152,18 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM*, void*) {
     LWRTX_InstallHooks();
     return JNI_VERSION_1_6;
 }
+
+/*
+ * When this library is linked as a DT_NEEDED dependency of libminecraftpe.so,
+ * Android's linker loads it before Minecraft's library. JNI_OnLoad is not
+ * guaranteed to run for dependency-only libraries, so install the GLES hooks
+ * from a constructor as well. LWRTX_InstallHooks is idempotent; an explicit
+ * System.loadLibrary path can still use JNI_OnLoad safely.
+ */
+extern "C" __attribute__((constructor, visibility("default")))
+void LWRTX_AutoInstallHooks() {
+    const int result = LWRTX_InstallHooks();
+    if (result != 0) {
+        LWRTX_LOGE("automatic hook installation failed: %d", result);
+    }
+}
