@@ -16,7 +16,6 @@ bool IsGlsl300(const std::string& s) {
     return s.substr(p, e == std::string::npos ? e : e - p).find("300") != std::string::npos;
 }
 
-// GLSL requires #extension directives to precede ordinary declarations.
 void InsertHeader(std::string& source, const std::string& code) {
     const std::size_t version = source.find("#version");
     if (version == std::string::npos) {
@@ -51,6 +50,15 @@ bool ReplaceFirst(std::string& s, const std::string& a, const std::string& b) {
     const std::size_t p = s.find(a);
     if (p == std::string::npos) return false;
     s.replace(p, a.size(), b);
+    return true;
+}
+
+bool ReplaceBeforeFog(std::string& s, const std::string& lighting) {
+    const std::regex fog(R"(#ifdef\s+FOG\s*\r?\n[ \t]*diffuse\.rgb\s*=\s*mix)");
+    std::smatch match;
+    if (!std::regex_search(s, match, fog)) return false;
+    s.replace(static_cast<std::size_t>(match.position()),
+              static_cast<std::size_t>(match.length()), lighting + match.str());
     return true;
 }
 
@@ -105,12 +113,9 @@ bool TransformFragment(std::string& s) {
         " diffuse.rgb *= mix(vec3(1.0), vec3(max(lwrtxFactor, 0.0)), clamp(LWRTX_ENABLED, 0.0, 1.0));\n"
         "}\n";
 
-    // Prefer inserting before Bedrock's fog pass so fog remains the final blend.
-    if (ReplaceFirst(s, "#ifdef FOG\n    diffuse.rgb = mix",
-                     lighting + "#ifdef FOG\n    diffuse.rgb = mix")) return true;
-    // Fallback for shader variants without the canonical fog block.
-    if (ReplaceDiffuseOutput(s, "gl_FragColor", lighting)) return true;
-    return ReplaceDiffuseOutput(s, "FragColor", lighting);
+    if (ReplaceBeforeFog(s, lighting)) return true;
+    return ReplaceDiffuseOutput(s, "gl_FragColor", lighting) ||
+           ReplaceDiffuseOutput(s, "FragColor", lighting);
 }
 } // namespace
 
