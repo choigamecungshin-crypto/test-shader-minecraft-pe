@@ -23,6 +23,24 @@ int main() {
     assert(f300.find("dFdx(lwrtxWorldPos)") != std::string::npos);
     assert(f300.find("LWRTX_LIGHT_INTENSITY") != std::string::npos);
     assert(f300.find("diffuse.rgb *= mix") != std::string::npos);
+    assert(f300.find("void main") < f300.find("LWRTX Cornell-inspired"));
+
+    const std::string fragmentFog =
+        "#version 100\n"
+        "varying vec4 fogColor;\n"
+        "uniform sampler2D TEXTURE_0;\n"
+        "void main(){ vec4 diffuse=vec4(1.0);\n"
+        "#ifdef FOG\n"
+        "    diffuse.rgb = mix(diffuse.rgb, fogColor.rgb, fogColor.a);\n"
+        "#endif\n"
+        "    gl_FragColor = diffuse;\n"
+        "}\n";
+    const std::string ffog = lwrtx::TransformShaderSource(lwrtx::kFragmentShader, fragmentFog);
+    const std::size_t lightingAt = ffog.find("LWRTX Cornell-inspired");
+    const std::size_t fogAt = ffog.find("#ifdef FOG\n    diffuse.rgb = mix");
+    assert(lightingAt != std::string::npos && fogAt != std::string::npos);
+    assert(lightingAt < fogAt);
+    assert(ffog.find("void main") < lightingAt);
 
     const std::string fragment100 =
         "#version 100\n"
