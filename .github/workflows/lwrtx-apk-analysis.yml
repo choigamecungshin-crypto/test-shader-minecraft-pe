@@ -33,7 +33,7 @@ jobs:
             find "$ANDROID_HOME" -maxdepth 5 -type f | head -100 >&2
             exit 1
           fi
-          chmod +x "$APKANALYZER"
+          test -x "$APKANALYZER"
           echo "apkanalyzer=$APKANALYZER" >> "$GITHUB_OUTPUT"
 
       - name: Download Minecraft PE 1.26.60.4 from test release
