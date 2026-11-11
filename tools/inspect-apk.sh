@@ -3,6 +3,7 @@ set -euo pipefail
 
 APK="${1:?Usage: inspect-apk.sh <minecraft.apk> [output-dir]}"
 OUT="${2:-report}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APKANALYZER="${APKANALYZER:-}"
 
 for tool in unzip readelf strings file sha256sum; do
@@ -89,7 +90,7 @@ for entry in \
     archive="$OUT/ui-archives/$name"
     unzip -p "$APK" "$entry" > "$archive"
     outdir="$OUT/ui-archives/${name%.brarchive}"
-    python3 tools/brarchive_unpack.py "$archive" "$outdir" > "$outdir-index.txt"
+    python3 "$SCRIPT_DIR/brarchive_unpack.py" "$archive" "$outdir" > "$outdir-index.txt"
     {
       echo "Archive: $entry"
       file "$archive"
