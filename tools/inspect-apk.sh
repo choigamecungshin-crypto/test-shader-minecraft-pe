@@ -28,7 +28,7 @@ unzip -Z1 "$APK" > "$OUT/apk-file-list.txt"
   echo "SHA-256: $(sha256sum "$APK" | cut -d' ' -f1)"
   echo
   echo "=== APK entries relevant to graphics and runtime ==="
-  grep -Ei '(^|/)(libminecraftpe[.]so|[^/]*(graphics|render|option|setting|resource)[^/]*|AndroidManifest[.]xml)$|^assets/' "$OUT/apk-file-list.txt" | head -1000 || true
+  grep -Ei '(^|/)(libminecraftpe[.]so|[^/]*(graphics|render|option|setting|resource)[^/]*|AndroidManifest[.]xml)$|^assets/' "$OUT/apk-file-list.txt" || true
   echo
   echo "=== ARM64 shared libraries ==="
   grep -E '^lib/arm64-v8a/.*[.]so$' "$OUT/apk-file-list.txt" || true
@@ -66,13 +66,13 @@ if [ -n "$LIB_PATH" ]; then
     readelf -d "$OUT/native/libminecraftpe.so" | grep NEEDED || true
     echo
     echo "=== Graphics/menu strings (ASCII) ==="
-    strings -a "$OUT/native/libminecraftpe.so" | grep -Ei 'Vibrant Visuals|Ray Tracing|Graphics Mode|graphics mode|rendering|shader|raytrac|vibrant|deferred|lighting' | head -1000 || true
+    strings -a "$OUT/native/libminecraftpe.so" | grep -Ei 'Vibrant Visuals|Ray Tracing|Graphics Mode|graphics mode|rendering|shader|raytrac|vibrant|deferred|lighting' || true
     echo
     echo "=== Graphics/menu strings (UTF-16LE) ==="
-    strings -el "$OUT/native/libminecraftpe.so" | grep -Ei 'Vibrant Visuals|Ray Tracing|Graphics Mode|graphics mode|rendering|shader|raytrac|vibrant|deferred|lighting' | head -1000 || true
+    strings -el "$OUT/native/libminecraftpe.so" | grep -Ei 'Vibrant Visuals|Ray Tracing|Graphics Mode|graphics mode|rendering|shader|raytrac|vibrant|deferred|lighting' || true
     echo
     echo "=== Dynamic symbols related to graphics ==="
-    readelf -Ws "$OUT/native/libminecraftpe.so" | grep -Ei 'shader|render|graphics|option|setting|gles|egl|vulkan' | head -700 || true
+    readelf -Ws "$OUT/native/libminecraftpe.so" | grep -Ei 'shader|render|graphics|option|setting|gles|egl|vulkan' || true
   } > "$OUT/native-graphics-strings.txt"
   rm -f "$OUT/native/libminecraftpe.so"
 else
@@ -102,7 +102,7 @@ done
 
 {
   echo "=== Graphics settings UI files ==="
-  find "$OUT/ui-archives" -type f \\( -name '*.json' -o -name '*.jsonc' -o -name '*.ui' \\) -print0 |
+  find "$OUT/ui-archives" -type f \( -name '*.json' -o -name '*.jsonc' -o -name '*.ui' \) -print0 |
     xargs -0 -r grep -nEi 'graphics_mode|graphicsMode|ray.?trac|vibrant|deferred|video_settings|graphics' || true
 } >> "$OUT/ui-archives/summary.txt"
 
