@@ -78,6 +78,27 @@ else
   echo "No ARM64 Minecraft native library found in APK." > "$OUT/native-graphics-strings.txt"
 fi
 
+# Extract the vanilla settings-section and localization archives so the
+# graphics-mode UI structure can be inspected without unpacking the full APK.
+mkdir -p "$OUT/ui-archives"
+for entry in \
+  "assets/assets/resource_packs/vanilla/__brarchive/ui/settings_sections.brarchive" \
+  "assets/assets/resource_packs/vanilla/__brarchive/texts.brarchive"; do
+  if grep -Fxq "$entry" "$OUT/apk-file-list.txt"; then
+    name="$(basename "$entry")"
+    unzip -p "$APK" "$entry" > "$OUT/ui-archives/$name"
+    {
+      echo "Archive: $entry"
+      file "$OUT/ui-archives/$name"
+      echo "Size: $(stat -c%s "$OUT/ui-archives/$name") bytes"
+      echo "Magic:"
+      od -An -tx1 -N64 "$OUT/ui-archives/$name"
+      echo "Readable strings:"
+      strings -a "$OUT/ui-archives/$name" | grep -Ei 'graphics|ray.?trac|vibrant|deferred|video|settings|mode' | head -250 || true
+    } >> "$OUT/ui-archives/summary.txt"
+  fi
+done
+
 {
   echo "APK_SIZE=$(stat -c%s "$APK")"
   echo "APK_SHA256=$(sha256sum "$APK" | cut -d' ' -f1)"
