@@ -1,0 +1,110 @@
+// __multiversion__
+// LWRTX experimental RenderChunk fragment shader.
+// Preserves vanilla texture, lightmap, alpha-test, seasons, and fog paths.
+
+#include "fragmentVersionCentroid.h"
+
+#if __VERSION__ < 300
+    #extension GL_OES_standard_derivatives : enable
+#endif
+
+#if __VERSION__ >= 300
+    #ifndef BYPASS_PIXEL_SHADER
+        _centroid in highp vec2 uv0;
+        _centroid in highp vec2 uv1;
+    #endif
+#else
+    #ifndef BYPASS_PIXEL_SHADER
+        varying vec2 uv0;
+        varying vec2 uv1;
+    #endif
+#endif
+
+varying vec4 color;
+varying vec3 lwrtxWorldPos;
+
+#ifdef FOG
+varying vec4 fogColor;
+#endif
+
+#include "uniformShaderConstants.h"
+#include "util.h"
+
+LAYOUT_BINDING(0) uniform sampler2D TEXTURE_0;
+LAYOUT_BINDING(1) uniform sampler2D TEXTURE_1;
+LAYOUT_BINDING(2) uniform sampler2D TEXTURE_2;
+
+uniform vec3 LWRTX_LIGHT_DIRECTION;
+uniform float LWRTX_LIGHT_INTENSITY;
+uniform float LWRTX_AMBIENT;
+uniform float LWRTX_ENABLED;
+
+void main() {
+#ifdef BYPASS_PIXEL_SHADER
+    gl_FragColor = vec4(0.0);
+    return;
+#else
+#if USE_TEXEL_AA
+    vec4 diffuse = texture2D_AA(TEXTURE_0, uv0);
+#else
+    vec4 diffuse = texture2D(TEXTURE_0, uv0);
+#endif
+
+#ifdef SEASONS_FAR
+    diffuse.a = 1.0;
+#endif
+
+#if USE_ALPHA_TEST
+    #ifdef ALPHA_TO_COVERAGE
+        #define ALPHA_THRESHOLD 0.05
+    #else
+        #define ALPHA_THRESHOLD 0.5
+    #endif
+    if (diffuse.a < ALPHA_THRESHOLD) discard;
+#endif
+
+    vec4 inColor = color;
+#if defined(BLEND)
+    diffuse.a *= inColor.a;
+#endif
+
+#if !defined(ALWAYS_LIT)
+    diffuse *= texture2D(TEXTURE_1, uv1);
+#endif
+
+#ifndef SEASONS
+    #if !USE_ALPHA_TEST && !defined(BLEND)
+        diffuse.a = inColor.a;
+    #endif
+    diffuse.rgb *= inColor.rgb;
+#else
+    vec2 seasonUV = inColor.xy;
+    diffuse.rgb *= mix(vec3(1.0), texture2D(TEXTURE_2, seasonUV).rgb * 2.0,
+                       inColor.b);
+    diffuse.rgb *= inColor.aaa;
+    diffuse.a = 1.0;
+#endif
+
+    vec3 dpdx = dFdx(lwrtxWorldPos);
+    vec3 dpdy = dFdy(lwrtxWorldPos);
+    vec3 N = normalize(cross(dpdx, dpdy));
+    if (!gl_FrontFacing) N = -N;
+
+    vec3 fallbackLight = normalize(vec3(-0.35, 0.82, -0.44));
+    float directionLength2 = dot(LWRTX_LIGHT_DIRECTION, LWRTX_LIGHT_DIRECTION);
+    vec3 L = directionLength2 > 0.0001
+        ? normalize(LWRTX_LIGHT_DIRECTION)
+        : fallbackLight;
+
+    float ndotl = max(dot(N, L), 0.0);
+    float lit = max(LWRTX_AMBIENT, 0.0) +
+                max(LWRTX_LIGHT_INTENSITY, 0.0) * ndotl;
+    diffuse.rgb *= mix(vec3(1.0), vec3(max(lit, 0.0)),
+                       clamp(LWRTX_ENABLED, 0.0, 1.0));
+
+#ifdef FOG
+    diffuse.rgb = mix(diffuse.rgb, fogColor.rgb, fogColor.a);
+#endif
+    gl_FragColor = diffuse;
+#endif
+}
