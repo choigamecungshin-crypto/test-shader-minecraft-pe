@@ -1,0 +1,87 @@
+name: Inspect Minecraft PE APK for LWRTX integration
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout LWRTX source
+        uses: actions/checkout@v4
+
+      - name: Install Android build tools
+        uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platform-tools
+            build-tools;35.0.0
+
+      - name: Download Minecraft PE 1.26.60.4 from test release
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 4 --retry-delay 3 \
+            -o minecraft.apk \
+            "https://github.com/choigamecungshin-crypto/test/releases/download/Minecraft-1.26.60.4/Minecraft_1.26.60.4.apk"
+          echo "APK_SHA256=$(sha256sum minecraft.apk | cut -d' ' -f1)" >> "$GITHUB_ENV"
+          echo "APK_SIZE=$(stat -c%s minecraft.apk)" >> "$GITHUB_ENV"
+
+      - name: Inspect APK structure and native graphics symbols
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p report
+          {
+            echo "LWRTX APK integration reconnaissance"
+            echo "APK size: $APK_SIZE bytes"
+            echo "APK SHA-256: $APK_SHA256"
+            echo
+            echo "=== Package metadata ==="
+            "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging minecraft.apk | head -80 || true
+            echo
+            echo "=== Relevant APK entries ==="
+            unzip -Z1 minecraft.apk | grep -Ei '(^|/)(libminecraftpe\\.so|.*(graphics|render|option|setting|resource).*|AndroidManifest\\.xml)$|^assets/' | head -500 || true
+            echo
+            echo "=== ARM64 native libraries ==="
+            unzip -Z1 minecraft.apk | grep '^lib/arm64-v8a/.*\\.so$' || true
+          } > report/apk-overview.txt
+
+          LIB_PATH="$(unzip -Z1 minecraft.apk | grep -m1 '^lib/arm64-v8a/libminecraftpe\\.so$' || true)"
+          if [ -z "$LIB_PATH" ]; then
+            LIB_PATH="$(unzip -Z1 minecraft.apk | grep -m1 '^lib/arm64-v8a/.*minecraft.*\\.so$' || true)"
+          fi
+          if [ -n "$LIB_PATH" ]; then
+            unzip -p minecraft.apk "$LIB_PATH" > report/libminecraftpe.so
+            {
+              echo "Native library path: $LIB_PATH"
+              echo "Native library size: $(stat -c%s report/libminecraftpe.so)"
+              echo
+              echo "=== ASCII graphics/menu strings ==="
+              strings -a report/libminecraftpe.so | grep -Ei 'Vibrant Visuals|Ray Tracing|Graphics Mode|graphics mode|rendering|shader|raytrac|vibrant' | head -500 || true
+              echo
+              echo "=== UTF-16LE graphics/menu strings ==="
+              strings -el report/libminecraftpe.so | grep -Ei 'Vibrant Visuals|Ray Tracing|Graphics Mode|graphics mode|rendering|shader|raytrac|vibrant' | head -500 || true
+              echo
+              echo "=== Dynamic symbols related to graphics ==="
+              llvm-readelf -Ws report/libminecraftpe.so 2>/dev/null | grep -Ei 'shader|render|graphics|option|setting|gles|egl' | head -300 || true
+            } > report/native-graphics-strings.txt
+            rm report/libminecraftpe.so
+          else
+            echo "No matching ARM64 Minecraft native library found." > report/native-graphics-strings.txt
+          fi
+
+          echo "APK_SHA256=$APK_SHA256" > report/build-metadata.txt
+          echo "APK_SIZE=$APK_SIZE" >> report/build-metadata.txt
+
+      - name: Upload reconnaissance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: lwrtx-minecraft-1.26.60.4-apk-inspection
+          path: report/
+          if-no-files-found: error
+          retention-days: 14
