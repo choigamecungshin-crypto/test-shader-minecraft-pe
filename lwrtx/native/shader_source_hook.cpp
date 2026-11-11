@@ -6,6 +6,7 @@
 #include <cstring>
 #include <mutex>
 #include <string>
+#include <jni.h>
 
 #define LWRTX_LOGI(...) __android_log_print(ANDROID_LOG_INFO, "LWRTX", __VA_ARGS__)
 #define LWRTX_LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "LWRTX", __VA_ARGS__)
@@ -23,6 +24,8 @@ std::atomic<float> g_ambient{0.35f};
 std::atomic<float> g_enabled{1.0f};
 std::atomic<bool> g_installed{false};
 std::mutex g_installMutex;
+void* g_shaderHookStub = nullptr;
+void* g_linkHookStub = nullptr;
 
 void HookedShaderSource(GLuint shader, GLsizei count,
                         const GLchar* const* strings, const GLint* lengths) {
@@ -74,9 +77,6 @@ void HookedLinkProgram(GLuint program) {
     if (ambient >= 0) glUniform1f(ambient, g_ambient.load());
     if (enabled >= 0) glUniform1f(enabled, g_enabled.load());
 }
-
-void* g_shaderHookStub = nullptr;
-void* g_linkHookStub = nullptr;
 } // namespace
 
 extern "C" __attribute__((visibility("default")))
@@ -90,28 +90,33 @@ int LWRTX_InstallHooks() {
         return initResult;
     }
 
+    void* originalShaderSource = nullptr;
     g_shaderHookStub = shadowhook_hook_sym_name(
         "libGLESv2.so", "glShaderSource",
-        reinterpret_cast<void*>(HookedShaderSource),
-        reinterpret_cast<void**>(&g_originalShaderSource));
-    if (!g_shaderHookStub) {
+        reinterpret_cast<void*>(HookedShaderSource), &originalShaderSource);
+    if (!g_shaderHookStub || !originalShaderSource) {
         const int error = shadowhook_get_errno();
         LWRTX_LOGE("glShaderSource hook failed: %d %s", error, shadowhook_to_errmsg(error));
+        g_shaderHookStub = nullptr;
         return error ? error : -1;
     }
+    g_originalShaderSource.store(reinterpret_cast<ShaderSourceFn>(originalShaderSource),
+                                 std::memory_order_release);
 
+    void* originalLinkProgram = nullptr;
     g_linkHookStub = shadowhook_hook_sym_name(
         "libGLESv2.so", "glLinkProgram",
-        reinterpret_cast<void*>(HookedLinkProgram),
-        reinterpret_cast<void**>(&g_originalLinkProgram));
-    if (!g_linkHookStub) {
+        reinterpret_cast<void*>(HookedLinkProgram), &originalLinkProgram);
+    if (!g_linkHookStub || !originalLinkProgram) {
         const int error = shadowhook_get_errno();
         LWRTX_LOGE("glLinkProgram hook failed: %d %s", error, shadowhook_to_errmsg(error));
-        shadowhook_unhook(g_shaderHookStub);
+        if (g_shaderHookStub) shadowhook_unhook(g_shaderHookStub);
         g_shaderHookStub = nullptr;
         g_originalShaderSource.store(nullptr, std::memory_order_release);
         return error ? error : -2;
     }
+    g_originalLinkProgram.store(reinterpret_cast<LinkProgramFn>(originalLinkProgram),
+                                std::memory_order_release);
 
     g_installed.store(true, std::memory_order_release);
     LWRTX_LOGI("GLES hooks installed");
@@ -134,8 +139,7 @@ int LWRTX_IsHookInstalled() {
     return g_installed.load(std::memory_order_acquire) ? 1 : 0;
 }
 
-// JNI loading is the bootstrap point when this library is integrated into an Android app.
-#include <jni.h>
+// Called automatically only when an Android host app loads this library with System.loadLibrary().
 extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM*, void*) {
     LWRTX_InstallHooks();
     return JNI_VERSION_1_6;
