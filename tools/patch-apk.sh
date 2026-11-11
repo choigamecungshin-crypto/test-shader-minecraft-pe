@@ -52,7 +52,11 @@ mkdir -p "$(dirname "$OUTPUT_APK")"
 cp "$APK" "$WORK/unsigned.apk"
 zip -q -d "$WORK/unsigned.apk" \
   "lib/arm64-v8a/libminecraftpe.so" \
-  "$SETTINGS_ARCHIVE"
+  "$SETTINGS_ARCHIVE" \
+  'META-INF/*.SF' \
+  'META-INF/*.RSA' \
+  'META-INF/*.DSA' \
+  'META-INF/MANIFEST.MF'
 
 (
   cd "$ROOT"
