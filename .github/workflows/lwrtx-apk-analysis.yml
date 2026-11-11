@@ -17,18 +17,24 @@ jobs:
       - name: Checkout LWRTX source
         uses: actions/checkout@v4
 
-      - name: Set up Android SDK tools
+      - name: Set up Android SDK command-line tools
         uses: android-actions/setup-android@v4
         with:
-          packages: 'platform-tools'
+          packages: ''
 
-      - name: Install Android build tools
+      - name: Locate APK Analyzer
+        id: android-tools
         shell: bash
         run: |
           set -euo pipefail
-          sdkmanager "build-tools;35.0.0"
-          test -x "$ANDROID_HOME/build-tools/35.0.0/aapt"
-          test -x "$ANDROID_HOME/build-tools/35.0.0/apkanalyzer"
+          APKANALYZER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name apkanalyzer -print -quit)"
+          if [ -z "$APKANALYZER" ]; then
+            echo "apkanalyzer is missing from the installed Android command-line tools" >&2
+            find "$ANDROID_HOME" -maxdepth 5 -type f | head -100 >&2
+            exit 1
+          fi
+          chmod +x "$APKANALYZER"
+          echo "apkanalyzer=$APKANALYZER" >> "$GITHUB_OUTPUT"
 
       - name: Download Minecraft PE 1.26.60.4 from test release
         shell: bash
@@ -42,15 +48,13 @@ jobs:
 
       - name: Inspect APK and extract ARM64 graphics evidence
         shell: bash
+        env:
+          APKANALYZER: ${{ steps.android-tools.outputs.apkanalyzer }}
         run: |
           set -euo pipefail
           mkdir -p report/native
-          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
-          APKANALYZER="$ANDROID_HOME/build-tools/35.0.0/apkanalyzer"
-
           unzip -Z1 minecraft.apk > report/apk-file-list.txt
-          "$AAPT" dump badging minecraft.apk > report/badging.txt
-          unzip -p minecraft.apk AndroidManifest.xml > report/AndroidManifest.xml
+          "$APKANALYZER" manifest print minecraft.apk > report/manifest.txt
           "$APKANALYZER" manifest application-id minecraft.apk > report/application-id.txt || true
           "$APKANALYZER" manifest min-sdk minecraft.apk > report/min-sdk.txt || true
           "$APKANALYZER" manifest target-sdk minecraft.apk > report/target-sdk.txt || true
@@ -60,8 +64,8 @@ jobs:
             echo "APK size: $APK_SIZE bytes"
             echo "APK SHA-256: $APK_SHA256"
             echo
-            echo "=== Package metadata ==="
-            head -100 report/badging.txt
+            echo "=== Android manifest ==="
+            head -160 report/manifest.txt
             echo
             echo "=== Relevant APK entries ==="
             grep -Ei '(^|/)(libminecraftpe[.]so|[^/]*(graphics|render|option|setting|resource)[^/]*|AndroidManifest[.]xml)$|^assets/' report/apk-file-list.txt | head -700 || true
