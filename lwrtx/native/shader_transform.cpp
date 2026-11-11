@@ -17,22 +17,18 @@ bool IsGlsl300(const std::string& s) {
 }
 
 // GLSL requires #extension directives to precede ordinary declarations.
-// Keep any extension directives immediately following #version ahead of
-// injected declarations.
 void InsertHeader(std::string& source, const std::string& code) {
     const std::size_t version = source.find("#version");
     if (version == std::string::npos) {
         source.insert(0, code);
         return;
     }
-
     std::size_t insertAt = source.find('\n', version);
     if (insertAt == std::string::npos) {
         source += "\n" + code;
         return;
     }
     ++insertAt;
-
     while (insertAt < source.size()) {
         const std::size_t lineEnd = source.find('\n', insertAt);
         const std::size_t end = lineEnd == std::string::npos ? source.size() : lineEnd;
@@ -63,8 +59,8 @@ bool ReplaceDiffuseOutput(std::string& s, const std::string& outputName,
     const std::regex output("\\b" + outputName + R"(\s*=\s*diffuse\s*;)");
     std::smatch match;
     if (!std::regex_search(s, match, output)) return false;
-    s.replace(static_cast<std::size_t>(match.position()), static_cast<std::size_t>(match.length()),
-              lighting + match.str());
+    s.replace(static_cast<std::size_t>(match.position()),
+              static_cast<std::size_t>(match.length()), lighting + match.str());
     return true;
 }
 
@@ -109,7 +105,10 @@ bool TransformFragment(std::string& s) {
         " diffuse.rgb *= mix(vec3(1.0), vec3(max(lwrtxFactor, 0.0)), clamp(LWRTX_ENABLED, 0.0, 1.0));\n"
         "}\n";
 
-    if (ReplaceFirst(s, "#ifdef FOG", lighting + "#ifdef FOG")) return true;
+    // Prefer inserting before Bedrock's fog pass so fog remains the final blend.
+    if (ReplaceFirst(s, "#ifdef FOG\n    diffuse.rgb = mix",
+                     lighting + "#ifdef FOG\n    diffuse.rgb = mix")) return true;
+    // Fallback for shader variants without the canonical fog block.
     if (ReplaceDiffuseOutput(s, "gl_FragColor", lighting)) return true;
     return ReplaceDiffuseOutput(s, "FragColor", lighting);
 }
