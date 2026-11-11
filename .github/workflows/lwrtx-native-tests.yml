@@ -1,0 +1,24 @@
+name: LWRTX native shader transform tests
+
+on:
+  push:
+    paths:
+      - "lwrtx/native/**"
+      - ".github/workflows/lwrtx-native-tests.yml"
+  pull_request:
+    paths:
+      - "lwrtx/native/**"
+      - ".github/workflows/lwrtx-native-tests.yml"
+  workflow_dispatch:
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S lwrtx/native -B build/lwrtx -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build/lwrtx --parallel 2
+      - name: Test
+        run: ctest --test-dir build/lwrtx --output-on-failure
