@@ -78,26 +78,32 @@ else
   echo "No ARM64 Minecraft native library found in APK." > "$OUT/native-graphics-strings.txt"
 fi
 
-# Extract the vanilla settings-section and localization archives so the
-# graphics-mode UI structure can be inspected without unpacking the full APK.
+# Decode the vanilla UI archives to expose settings/video UI JSON definitions.
 mkdir -p "$OUT/ui-archives"
 for entry in \
+  "assets/assets/resource_packs/vanilla/__brarchive/ui.brarchive" \
   "assets/assets/resource_packs/vanilla/__brarchive/ui/settings_sections.brarchive" \
-  "assets/assets/resource_packs/vanilla/__brarchive/texts.brarchive"; do
+  "assets/assets/resource_packs/vanilla_base/__brarchive/ui.brarchive"; do
   if grep -Fxq "$entry" "$OUT/apk-file-list.txt"; then
-    name="$(basename "$entry")"
-    unzip -p "$APK" "$entry" > "$OUT/ui-archives/$name"
+    name="$(echo "$entry" | sed 's#/#__#g')"
+    archive="$OUT/ui-archives/$name"
+    unzip -p "$APK" "$entry" > "$archive"
+    outdir="$OUT/ui-archives/${name%.brarchive}"
+    python3 tools/brarchive_unpack.py "$archive" "$outdir" > "$outdir-index.txt"
     {
       echo "Archive: $entry"
-      file "$OUT/ui-archives/$name"
-      echo "Size: $(stat -c%s "$OUT/ui-archives/$name") bytes"
-      echo "Magic:"
-      od -An -tx1 -N64 "$OUT/ui-archives/$name"
-      echo "Readable strings:"
-      strings -a "$OUT/ui-archives/$name" | grep -Ei 'graphics|ray.?trac|vibrant|deferred|video|settings|mode' | head -250 || true
+      file "$archive"
+      echo "Size: $(stat -c%s "$archive") bytes"
+      cat "$outdir-index.txt"
     } >> "$OUT/ui-archives/summary.txt"
   fi
 done
+
+{
+  echo "=== Graphics settings UI files ==="
+  find "$OUT/ui-archives" -type f \\( -name '*.json' -o -name '*.jsonc' -o -name '*.ui' \\) -print0 |
+    xargs -0 -r grep -nEi 'graphics_mode|graphicsMode|ray.?trac|vibrant|deferred|video_settings|graphics' || true
+} >> "$OUT/ui-archives/summary.txt"
 
 {
   echo "APK_SIZE=$(stat -c%s "$APK")"
