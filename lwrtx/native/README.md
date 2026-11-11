@@ -1,25 +1,27 @@
-# LWRTX native shader-source transformer
+# LWRTX native runtime
 
-C++17 shader-source transformer and Android GLES callback for a future external hook installer. It recognizes Bedrock RenderChunk shader strings, adds a Cornell-inspired derivative diffuse term, and passes unrelated shaders through unchanged.
+The Android ARM64 build produces two runtime libraries:
 
-## Android callback
+- `liblwrtx_gles_hook.so`: C++ shader transformer, GLES hooks and uniform setup.
+- `libshadowhook.so`: ShadowHook runtime dependency (MIT, ByteDance).
 
-The Android build produces `liblwrtx_gles_hook.so`. An external hook installer must:
+## Runtime behavior
 
-1. Resolve the original `glShaderSource` function.
-2. Call `LWRTX_SetOriginalShaderSource(original)`.
-3. Redirect calls to `LWRTX_glShaderSource`.
+When the host Android app loads `liblwrtx_gles_hook.so` with `System.loadLibrary()`, `JNI_OnLoad` attempts to install inline hooks for:
 
-This repository does not yet contain that hook installer or a Minecraft library loader. The callback alone does not inject itself.
+- `libGLESv2.so!glShaderSource`: transforms recognized Bedrock RenderChunk vertex/fragment shader strings.
+- `libGLESv2.so!glLinkProgram`: after successful link, initializes the four LWRTX uniforms if they exist in the program.
 
-The runtime must also set `LWRTX_LIGHT_DIRECTION`, `LWRTX_LIGHT_INTENSITY`, `LWRTX_AMBIENT`, and `LWRTX_ENABLED` on each linked RenderChunk program. Uniform/program binding is not implemented yet.
+The C exports are:
 
-## Host tests
+- `LWRTX_InstallHooks()` — explicitly retry hook installation; returns 0 on success.
+- `LWRTX_IsHookInstalled()` — returns 1 only after both hooks are installed.
+- `LWRTX_SetLighting(x, y, z, intensity, ambient, enabled)` — sets values used when a later program is linked.
 
-```sh
-cmake -S lwrtx/native -B build/lwrtx
-cmake --build build/lwrtx --parallel
-ctest --test-dir build/lwrtx --output-on-failure
-```
+Default lighting values are direction (-0.35, 0.82, -0.44), intensity 0.75, ambient 0.35, enabled 1.0.
 
-Runtime shader capture is still required to confirm whether Minecraft passes raw or preprocessed source to `glShaderSource`.
+## Critical integration limitation
+
+This library does **not** load itself into Minecraft. It must be loaded inside the Minecraft process by a legitimate host/launcher integration (for example, a modified app that calls `System.loadLibrary`). A standalone APK containing these libraries does not automatically attach to the official Minecraft process. No rootless external injector or in-game Graphics Mode menu is included.
+
+The hook targets and shader variants still require runtime validation on Minecraft Bedrock 1.26.60.4. If the game resolves GLES entry points through a different dispatch path, the symbol hooks may not see its calls. The build succeeding is not proof that the game accepts the modified shader.
