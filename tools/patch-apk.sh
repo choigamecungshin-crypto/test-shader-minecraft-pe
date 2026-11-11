@@ -60,14 +60,14 @@ zip -q -d "$WORK/unsigned.apk" \
 
 (
   cd "$ROOT"
-  zip -q -0 "$WORK/unsigned.apk" \
+  zip -q -1 "$WORK/unsigned.apk" \
     "lib/arm64-v8a/libminecraftpe.so" \
     "lib/arm64-v8a/liblwrtx_gles_hook.so" \
     "lib/arm64-v8a/libshadowhook.so" \
     "$SETTINGS_ARCHIVE"
 )
 
-"$ZIPALIGN" -f -p 4 "$WORK/unsigned.apk" "$WORK/aligned.apk"
+"$ZIPALIGN" -f 4 "$WORK/unsigned.apk" "$WORK/aligned.apk"
 "$APKSIGNER" sign \
   --ks "$KEYSTORE" \
   --ks-key-alias lwrtx \
@@ -76,7 +76,7 @@ zip -q -d "$WORK/unsigned.apk" \
   --out "$OUTPUT_APK" \
   "$WORK/aligned.apk"
 
-"$ZIPALIGN" -c -p -v 4 "$OUTPUT_APK"
+"$ZIPALIGN" -c -v 4 "$OUTPUT_APK"
 "$APKSIGNER" verify --verbose --print-certs "$OUTPUT_APK"
 unzip -Z1 "$OUTPUT_APK" | grep -E '^lib/arm64-v8a/(libminecraftpe|liblwrtx_gles_hook|libshadowhook)[.]so$'
 
@@ -85,7 +85,7 @@ unzip -Z1 "$OUTPUT_APK" | grep -E '^lib/arm64-v8a/(libminecraftpe|liblwrtx_gles_
   echo "APK_SIZE=$(stat -c%s "$OUTPUT_APK")"
   echo "INTEGRATION=LWRTX GLES hook added as DT_NEEDED dependency"
   echo "UI_MODE=LWRTX label aliases the existing Deferred graphics mode"
-  echo "SIGNING=temporary test key; this is not the original Play signing certificate"
+  echo "NATIVE_LIBS=compressed; source manifest extractNativeLibs=true"\n  echo "SIGNING=temporary test key; this is not the original Play signing certificate"
   echo "PAIRIP=untouched; runtime launch may reject a re-signed package"
 } > "${OUTPUT_APK}.metadata.txt"
 
