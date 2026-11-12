@@ -23,15 +23,16 @@ jobs:
       - name: Checkout LWRTX source
         uses: actions/checkout@v4
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install Android NDK and build tools
         shell: bash
         run: |
           set -euo pipefail
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "ndk;27.2.12479018" "build-tools;36.0.0"
+          ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print | sort -V | tail -n 1)"
+          test -x "$SDKMANAGER"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "ndk;27.2.12479018" "build-tools;36.0.0"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
           echo "ZIPALIGN=$ANDROID_HOME/build-tools/36.0.0/zipalign" >> "$GITHUB_ENV"
           echo "APKSIGNER=$ANDROID_HOME/build-tools/36.0.0/apksigner" >> "$GITHUB_ENV"
