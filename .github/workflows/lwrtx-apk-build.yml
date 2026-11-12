@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          yes | sdkmanager --licenses >/dev/null
+          yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "ndk;27.2.12479018" "build-tools;36.0.0"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
           echo "ZIPALIGN=$ANDROID_HOME/build-tools/36.0.0/zipalign" >> "$GITHUB_ENV"
@@ -45,7 +45,7 @@ jobs:
           command -v patchelf
           command -v zip
           command -v readelf
-          "$ZIPALIGN" -h >/dev/null
+          "$ZIPALIGN" -h >/dev/null 2>&1 || true
           "$APKSIGNER" version
 
       - name: Download the original Minecraft APK from the test repository Release
