@@ -44,7 +44,7 @@ mkdir -p "$ROOT/lib/arm64-v8a" "$ROOT/assets/assets/resource_packs/vanilla/__bra
 # Rebuild only the manifest layer with apktool's no-resource/no-dex mode.
 # This changes the Android application ID without unpacking/recompiling the
 # enormous Bedrock resource table or dex payload.
-"$APKTOOL" d --force --no-src --no-res "$APK" -o "$WORK/decoded"
+"$APKTOOL" d --force --no-src "$APK" -o "$WORK/decoded"
 MANIFEST="$WORK/decoded/AndroidManifest.xml"
 test -s "$MANIFEST"
 python3 - "$MANIFEST" "$PACKAGE_OLD" "$PACKAGE_NEW" <<'PY'
