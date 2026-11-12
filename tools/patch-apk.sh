@@ -61,7 +61,7 @@ if count != 1:
     raise SystemExit(f"Expected one manifest package={old!r}, found {count}")
 path.write_text(text.replace(needle, replacement, 1), encoding="utf-8")
 PY
-"$APKTOOL" b "$WORK/decoded" -o "$WORK/renamed.apk"
+"$APKTOOL" b --use-aapt2 "$WORK/decoded" -o "$WORK/renamed.apk"
 "$AAPT" dump badging "$WORK/renamed.apk" | grep -F "package: name='$PACKAGE_NEW'"
 echo "Package name changed: $PACKAGE_OLD -> $PACKAGE_NEW"
 
