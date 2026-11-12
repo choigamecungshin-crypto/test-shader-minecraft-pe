@@ -8,15 +8,27 @@ KEYSTORE="${4:?Missing signing keystore}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ZIPALIGN="${ZIPALIGN:-zipalign}"
 APKSIGNER="${APKSIGNER:-apksigner}"
+APKTOOL="${APKTOOL:-apktool}"
+AAPT="${AAPT:-aapt}"
+PACKAGE_OLD="com.mojang.minecraftpe"
+PACKAGE_NEW="com.mojang.minecraftpe.test"
 PATCH_NEEDED="liblwrtx_gles_hook.so"
 SETTINGS_ARCHIVE="assets/assets/resource_packs/vanilla/__brarchive/ui/settings_sections.brarchive"
 
-for tool in unzip zip patchelf sha256sum readelf; do
+for tool in unzip zip patchelf sha256sum readelf python3; do
   command -v "$tool" >/dev/null 2>&1 || {
     echo "Missing required tool: $tool" >&2
     exit 2
   }
 done
+command -v "$APKTOOL" >/dev/null 2>&1 || {
+  echo "Missing required tool: $APKTOOL" >&2
+  exit 2
+}
+command -v "$AAPT" >/dev/null 2>&1 || {
+  echo "Missing required tool: $AAPT" >&2
+  exit 2
+}
 test -x "$ZIPALIGN"
 test -x "$APKSIGNER"
 test -s "$APK"
@@ -29,8 +41,32 @@ trap 'rm -rf "$WORK"' EXIT
 ROOT="$WORK/root"
 mkdir -p "$ROOT/lib/arm64-v8a" "$ROOT/assets/assets/resource_packs/vanilla/__brarchive/ui"
 
-unzip -p "$APK" lib/arm64-v8a/libminecraftpe.so > "$ROOT/lib/arm64-v8a/libminecraftpe.so"
-unzip -p "$APK" "$SETTINGS_ARCHIVE" > "$WORK/settings_sections.original.brarchive"
+# Rebuild only the manifest layer with apktool's no-resource/no-dex mode.
+# This changes the Android application ID without unpacking/recompiling the
+# enormous Bedrock resource table or dex payload.
+"$APKTOOL" d --force --no-src --no-res "$APK" -o "$WORK/decoded"
+MANIFEST="$WORK/decoded/AndroidManifest.xml"
+test -s "$MANIFEST"
+python3 - "$MANIFEST" "$PACKAGE_OLD" "$PACKAGE_NEW" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+old, new = sys.argv[2], sys.argv[3]
+text = path.read_text(encoding="utf-8")
+needle = f'package="{old}"'
+replacement = f'package="{new}"'
+count = text.count(needle)
+if count != 1:
+    raise SystemExit(f"Expected one manifest package={old!r}, found {count}")
+path.write_text(text.replace(needle, replacement, 1), encoding="utf-8")
+PY
+"$APKTOOL" b "$WORK/decoded" -o "$WORK/renamed.apk"
+"$AAPT" dump badging "$WORK/renamed.apk" | grep -F "package: name='$PACKAGE_NEW'"
+echo "Package name changed: $PACKAGE_OLD -> $PACKAGE_NEW"
+
+unzip -p "$WORK/renamed.apk" lib/arm64-v8a/libminecraftpe.so > "$ROOT/lib/arm64-v8a/libminecraftpe.so"
+unzip -p "$WORK/renamed.apk" "$SETTINGS_ARCHIVE" > "$WORK/settings_sections.original.brarchive"
 test -s "$ROOT/lib/arm64-v8a/libminecraftpe.so"
 test -s "$WORK/settings_sections.original.brarchive"
 
@@ -49,7 +85,7 @@ fi
 readelf -d "$ROOT/lib/arm64-v8a/libminecraftpe.so" | grep -F "$PATCH_NEEDED"
 
 mkdir -p "$(dirname "$OUTPUT_APK")"
-cp "$APK" "$WORK/unsigned.apk"
+cp "$WORK/renamed.apk" "$WORK/unsigned.apk"
 zip -q -d "$WORK/unsigned.apk" \
   "lib/arm64-v8a/libminecraftpe.so" \
   "$SETTINGS_ARCHIVE" \
@@ -78,14 +114,17 @@ zip -q -d "$WORK/unsigned.apk" \
 
 "$ZIPALIGN" -c -v 4 "$OUTPUT_APK"
 "$APKSIGNER" verify --verbose --print-certs "$OUTPUT_APK"
+"$AAPT" dump badging "$OUTPUT_APK" | grep -F "package: name='$PACKAGE_NEW'"
 unzip -Z1 "$OUTPUT_APK" | grep -E '^lib/arm64-v8a/(libminecraftpe|liblwrtx_gles_hook|libshadowhook)[.]so$'
 
 {
   echo "APK_SHA256=$(sha256sum "$OUTPUT_APK" | cut -d' ' -f1)"
   echo "APK_SIZE=$(stat -c%s "$OUTPUT_APK")"
+  echo "PACKAGE_NAME=$PACKAGE_NEW"
   echo "INTEGRATION=LWRTX GLES hook added as DT_NEEDED dependency"
   echo "UI_MODE=LWRTX label aliases the existing Deferred graphics mode"
-  echo "NATIVE_LIBS=compressed; source manifest extractNativeLibs=true"\n  echo "SIGNING=temporary test key; this is not the original Play signing certificate"
+  echo "NATIVE_LIBS=liblwrtx_gles_hook.so and libshadowhook.so included"
+  echo "SIGNING=temporary test key; this is not the original Play signing certificate"
   echo "PAIRIP=untouched; runtime launch may reject a re-signed package"
 } > "${OUTPUT_APK}.metadata.txt"
 
