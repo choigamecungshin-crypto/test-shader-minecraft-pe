@@ -18,7 +18,7 @@ The Cornell Box shader is used as a lighting reference and adapted to the Bedroc
 
 The Android ARM64 runtime builds successfully and host regression tests pass.
 
-The experimental APK pipeline is hosted in the private `choigamecungshin-crypto/test` repository because that repository owns the private Minecraft APK release. It checks out this public source repository, downloads the release APK, inspects it, builds the ARM64 runtime, and produces a separately signed test APK.
+The APK build pipeline is hosted in this source repository. It downloads only the original Minecraft 1.26.60.4 APK from the Release in `choigamecungshin-crypto/test`; all LWRTX source changes, CI, compilation, APK patching, signing, and build artifacts remain in this repository.
 
 The current UI patch changes the visible **Deferred** graphics-mode label to **LWRTX**. It deliberately reuses Minecraft's existing `#graphics_mode_radio_deferred` binding. This exposes an LWRTX-labelled choice in the existing graphics-mode dropdown, but it is an alias of the native Deferred mode, **not a new native GraphicsMode enum value**. Adding a distinct engine mode still requires modifying the native graphics-mode selection and state logic.
 
@@ -38,7 +38,7 @@ ctest --test-dir build/lwrtx --output-on-failure
 
 Android ARM64 runtime: run the **LWRTX Android ARM64 build** workflow.
 
-APK inspection and experimental APK build: run **LWRTX APK inspection and ARM64 build** in the private APK repository. That workflow uploads the inspection report, ARM64 runtime libraries, and experimental signed APK as separate artifacts.
+APK inspection and experimental APK build: run **LWRTX Bedrock APK build** in this repository. The workflow downloads the pinned original APK from the `test` repository Release, verifies its SHA-256, runs host tests, builds the ARM64 runtime, patches and signs the APK, then uploads the APK, runtime libraries, and inspection report as artifacts here.
 
 ## Source layout
 
