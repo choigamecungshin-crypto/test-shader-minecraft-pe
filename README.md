@@ -38,6 +38,8 @@ ctest --test-dir build/lwrtx --output-on-failure
 
 Android ARM64 runtime: run the **LWRTX Android ARM64 build** workflow.
 
+Before running the workflow, add an Actions secret named `TEST_REPO_READ_TOKEN` in this repository. It must be a fine-grained token with read-only Contents access to the private `choigamecungshin-crypto/test` repository. The token is used only to download the original Release asset; it is never written into the APK or uploaded as an artifact.
+
 APK inspection and experimental APK build: run **LWRTX Bedrock APK build** in this repository. The workflow downloads the pinned original APK from the `test` repository Release, verifies its SHA-256, runs host tests, builds the ARM64 runtime, patches and signs the APK, then uploads the APK, runtime libraries, and inspection report as artifacts here.
 
 ## Source layout
