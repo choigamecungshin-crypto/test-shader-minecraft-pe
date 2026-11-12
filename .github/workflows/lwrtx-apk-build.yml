@@ -62,9 +62,27 @@ jobs:
             exit 1
           fi
           mkdir -p input
+          AUTH_HEADER="Authorization: Bearer $TEST_REPO_READ_TOKEN"
+          API_HEADERS=(-H "$AUTH_HEADER" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
+          check_api_access() {
+            local label="$1" url="$2" body="$RUNNER_TEMP/lwrtx-api-check.json" status
+            status="$(curl --silent --show-error --output "$body" --write-out '%{http_code}' "${API_HEADERS[@]}" "$url")"
+            echo "$label HTTP status: $status"
+            if [ "$status" != "200" ]; then
+              cat "$body"
+              if [ "$status" = "404" ]; then
+                echo "::error::$label returned 404. GitHub is hiding this private resource from the supplied token; check token repository selection/owner and Contents read permission."
+              else
+                echo "::error::$label returned HTTP $status."
+              fi
+              exit 1
+            fi
+          }
+          check_api_access "Private repository access" "https://api.github.com/repos/choigamecungshin-crypto/test"
+          check_api_access "Release asset metadata access" "$APK_ASSET_API"
           curl --fail --location --retry 5 --retry-all-errors --retry-delay 3 \
             -H "Accept: application/octet-stream" \
-            -H "Authorization: Bearer $TEST_REPO_READ_TOKEN" \
+            -H "$AUTH_HEADER" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             --output input/Minecraft_1.26.60.4.apk "$APK_ASSET_API"
           echo "$EXPECTED_SHA256  input/Minecraft_1.26.60.4.apk" | sha256sum --check
